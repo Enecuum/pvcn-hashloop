@@ -1,0 +1,20 @@
+
+
+create public key
+assign rights for freeze transaction adding for 21 day
+
+allocate freeze eneq units for other public key
+create public key
+create public key
+create public key
+block solve
+
+allocate freeze eneq units for other public key
+create public key
+create public key
+create public key
+block solve
+
+21 day
+
+
