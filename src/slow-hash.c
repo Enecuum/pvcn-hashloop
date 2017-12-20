@@ -38,6 +38,7 @@
 #include <stdio.h>
 #include <math.h>
 
+#include "slow-hash.h"
 #include "hash-ops.h"
 #include "oaes_lib.h"
 

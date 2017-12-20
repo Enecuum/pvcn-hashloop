@@ -34,7 +34,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+
+#define BYTE_ORDER 1234
+#define LITTLE_ENDIAN 1234
+#define BIG_ENDIAN 4321
+
+#ifndef _MSC_VER
 #include <sys/param.h>
+#endif
 
 #if defined(_MSC_VER)
 #include <stdlib.h>

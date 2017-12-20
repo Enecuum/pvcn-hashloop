@@ -513,8 +513,13 @@ static uint32_t oaes_get_seed(void)
 	_test = (char *) calloc( sizeof( char ), timer.millitm );
 	_ret = gmTimer->tm_year + 1900 + gmTimer->tm_mon + 1 + gmTimer->tm_mday +
 			gmTimer->tm_hour + gmTimer->tm_min + gmTimer->tm_sec + timer.millitm +
-			(uintptr_t) ( _test + timer.millitm ) + getpid();
-	#else
+			(uintptr_t) ( _test + timer.millitm ) + 
+		#ifdef _MSC_VER
+			_getpid();
+		#else
+			getpid();
+		#endif
+#else
 	struct timeval timer;
 	struct tm *gmTimer;
 	char * _test = NULL;
