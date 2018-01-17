@@ -574,13 +574,19 @@ int getFragmentSizeFromHash(uint8_t *hash)
  *
  * @param data the data to hash
  * @param length the length in bytes of the data
+ * @param maxFragments number of hash fragments to generate
+ * @param keccak_state state for keccak algorithm
  * @param hash a pointer to a buffer in which the final 256 bit hash will be stored
  */
 
-void pvcn_hashloop_hw(const void *data, size_t length
-                     ,int maxFragments, int position
-                     ,uint64_t *keccak_state, uint8_t *hash, int *fragments)
+void pvcn_hashloop_hw(const void *data,
+                      size_t length,
+                      int maxFragments,
+                      uint64_t *keccak_state,
+                      uint8_t *hash)
 {
+    int fragmentsCounter = 1;
+    int *fragments = &fragmentsCounter;
     RDATA_ALIGN16 uint8_t expandedKey[240];  /* These buffers are aligned to use later with SSE functions */
 
     uint8_t text[INIT_SIZE_BYTE];
@@ -597,18 +603,11 @@ void pvcn_hashloop_hw(const void *data, size_t length
 
     uint64_t *p = NULL;
     oaes_ctx *aes_ctx;
-    int useAes = !force_software_aes() && check_aes_hw();
-    useAes = 1;
-    //printf("111 %d\n", useAes);
-    
-    //printf("length %u\n", length);
 
     static void (*const extra_hashes[4])(const void *, size_t, char *) =
     {
         hash_extra_blake, hash_extra_groestl, hash_extra_jh, hash_extra_skein
     };
-
-    //printf("%u\n", length);
 
     slow_hash_allocate_state();
 
@@ -644,28 +643,12 @@ void pvcn_hashloop_hw(const void *data, size_t length
     /* CryptoNight Step 2:  Iteratively encrypt the results from Keccak to fill
      * the 2MB large random access buffer.
      */
-
-    if(useAes)
-    {
-        aes_expand_key(state.hs.b, expandedKey);
+    aes_expand_key(state.hs.b, expandedKey);
         for(i = 0; i < MEMORY / INIT_SIZE_BYTE; i++)
         {
             aes_pseudo_round(text, text, expandedKey, INIT_SIZE_BLK);
             memcpy(&hp_state[i * INIT_SIZE_BYTE], text, INIT_SIZE_BYTE);
         }
-    }
-    else
-    {
-        aes_ctx = (oaes_ctx *) oaes_alloc();
-        oaes_key_import_data(aes_ctx, state.hs.b, AES_KEY_SIZE);
-        for(i = 0; i < MEMORY / INIT_SIZE_BYTE; i++)
-        {
-            for(j = 0; j < INIT_SIZE_BLK; j++)
-                aesb_pseudo_round(&text[AES_BLOCK_SIZE * j], &text[AES_BLOCK_SIZE * j], aes_ctx->key->exp_data);
-
-            memcpy(&hp_state[i * INIT_SIZE_BYTE], text, INIT_SIZE_BYTE);
-        }
-    }
     memcpy(hp_state, &state.hs, sizeof(state.hs));
 
     int pz = 0;
@@ -703,181 +686,163 @@ void pvcn_hashloop_hw(const void *data, size_t length
     //fragmentPrecalc = 1024;
 
     mz = 0;
-    //printf("mz0 %d\n" , mz);
 
     _b = _mm_load_si128(R128(b));
-    if(useAes)
-    {
-      //printf("pz %u %u\n", pz, fragmentPrecalc);
 
-      for(ii = 0; ii < fragmentPrecalc; ii++)
-      //for(ii = 0; true; ii++)
-      {
-        // MACRO REGION C
-        j   = state_index(a);
-        kj  = keccak_index(a);
-        //printf("j %u\n", j);
-        _c  = _mm_load_si128(R128(&hp_state[j]));
-        _kc = _mm_load_si128(R128(&hp_state[kj]));
-        //_dc = _mm_load_si128(R128(&hp_state[ (mz>>4)<<4 ]));
-        _c  = _mm_xor_si128(_c, _kc);
-        //_c  = _mm_xor_si128(_c, _dc);
-        _a  = _mm_load_si128(R128(a));
+          for(ii = 0; ii < fragmentPrecalc; ii++)
+          //for(ii = 0; true; ii++)
+          {
+            // MACRO REGION C
+            j   = state_index(a);
+            kj  = keccak_index(a);
+            //printf("j %u\n", j);
+            _c  = _mm_load_si128(R128(&hp_state[j]));
+            _kc = _mm_load_si128(R128(&hp_state[kj]));
+            //_dc = _mm_load_si128(R128(&hp_state[ (mz>>4)<<4 ]));
+            _c  = _mm_xor_si128(_c, _kc);
+            //_c  = _mm_xor_si128(_c, _dc);
+            _a  = _mm_load_si128(R128(a));
 
-        mz += 16;
-        //printf("mz %u\n", mz);
-#if 0
-        if (mz == MEMORY) {
-          mz = 0;
-          if (MEMORY < length) {
-            // MACRO INSERT REGION D1234
+            mz += 16;
+            //printf("mz %u\n", mz);
+    #if 0
+            if (mz == MEMORY) {
+              mz = 0;
+              if (MEMORY < length) {
+                // MACRO INSERT REGION D1234
+              }
+            }
+    #endif
+
+            _c = _mm_aesenc_si128(_c, _a);
+            //printf("pz2 %u\n", pz);
+
+            _mm_store_si128(R128(c), _c);
+            kj = keccak_index(c);
+            //_kc = _mm_load_si128(R128(&hp_state[kj]));
+            _b = _mm_xor_si128(_b, _c);
+            _kb = _mm_xor_si128(_b, _kc);
+            _mm_store_si128(R128(&hp_state[j]),  _b);
+            _mm_store_si128(R128(&hp_state[kj]), _kb);
+            j = state_index(c);
+            p = U64(&hp_state[j]);
+            b[0] = p[0]; b[1] = p[1];
+            __mul();
+            a[0] += hi; a[1] += lo;
+            p = U64(&hp_state[j]);
+            p[0] = a[0];  p[1] = a[1];
+            a[0] ^= b[0]; a[1] ^= b[1];
+            _b = _c;
+            // Theta
+            for (i = 0; i < 5; i++)
+                bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^ st[i + 15] ^ st[i + 20];
+            for (i = 0; i < 5; i++) {
+                t = bc[(i + 4) % 5] ^ ROTL64(bc[(i + 1) % 5], 1);
+                for (j = 0; j < 25; j += 5)
+                    st[j + i] ^= t;
+            }
+            // Rho Pi
+            t = st[1];
+            for (i = 0; i < 24; i++) {
+                j = keccakf_piln[i];
+                bc[0] = st[j];
+                st[j] = ROTL64(t, keccakf_rotc[i]);
+                t = bc[0];
+            }
+            //  Chi
+            for (j = 0; j < 25; j += 5) {
+                for (i = 0; i < 5; i++)
+                    bc[i] = st[j + i];
+                for (i = 0; i < 5; i++)
+                    st[j + i] ^= (~bc[(i + 1) % 5]) & bc[(i + 2) % 5];
+            }
+            //  Iota
+            st[0] ^= keccakf_rndc[round];
+            if (round == 23) round = 0; else round++;
+            // MACRO REMEMBER REGION C
           }
-        }
-#endif
+          for(ii = 0; ii < fragmentSizeDividedByEHP; ii++) {
+            for(jj = 0; jj < extraHashPeriod; jj++) {
+              // INSERT REGION C
+                      j   = state_index(a);
+                      kj  = keccak_index(a);
+                      //printf("j %u\n", j);
+                      _c  = _mm_load_si128(R128(&hp_state[j]));
+                      _kc = _mm_load_si128(R128(&hp_state[kj]));
+                      //_dc = _mm_load_si128(R128(&hp_state[ (mz>>4)<<4 ]));
+                      _c  = _mm_xor_si128(_c, _kc);
+                      //_c  = _mm_xor_si128(_c, _dc);
+                      _a  = _mm_load_si128(R128(a));
 
-        _c = _mm_aesenc_si128(_c, _a);
-        //printf("pz2 %u\n", pz);
+                      mz += 16;
+                      //printf("mz %u\n", mz);
+              #if 0
+                      if (mz == MEMORY) {
+                        mz = 0;
+                        if (MEMORY < length) {
+                          // MACRO INSERT REGION D1234
+                        }
+                      }
+              #endif
 
-        _mm_store_si128(R128(c), _c);
-        kj = keccak_index(c);
-        //_kc = _mm_load_si128(R128(&hp_state[kj]));
-        _b = _mm_xor_si128(_b, _c);
-        _kb = _mm_xor_si128(_b, _kc);
-        _mm_store_si128(R128(&hp_state[j]),  _b);
-        _mm_store_si128(R128(&hp_state[kj]), _kb);
-        j = state_index(c);
-        p = U64(&hp_state[j]);
-        b[0] = p[0]; b[1] = p[1];
-        __mul();
-        a[0] += hi; a[1] += lo;
-        p = U64(&hp_state[j]);
-        p[0] = a[0];  p[1] = a[1];
-        a[0] ^= b[0]; a[1] ^= b[1];
-        _b = _c;
-        // Theta
-        for (i = 0; i < 5; i++)     
-            bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^ st[i + 15] ^ st[i + 20];
-        for (i = 0; i < 5; i++) {
-            t = bc[(i + 4) % 5] ^ ROTL64(bc[(i + 1) % 5], 1);
-            for (j = 0; j < 25; j += 5)
-                st[j + i] ^= t;
-        }
-        // Rho Pi
-        t = st[1];
-        for (i = 0; i < 24; i++) {
-            j = keccakf_piln[i];
-            bc[0] = st[j];
-            st[j] = ROTL64(t, keccakf_rotc[i]);
-            t = bc[0];
-        }
-        //  Chi
-        for (j = 0; j < 25; j += 5) {
-            for (i = 0; i < 5; i++)
-                bc[i] = st[j + i];
-            for (i = 0; i < 5; i++)
-                st[j + i] ^= (~bc[(i + 1) % 5]) & bc[(i + 2) % 5];
-        }
-        //  Iota
-        st[0] ^= keccakf_rndc[round];
-        if (round == 23) round = 0; else round++;
-        // MACRO REMEMBER REGION C
-      }
-      for(ii = 0; ii < fragmentSizeDividedByEHP; ii++) {
-        for(jj = 0; jj < extraHashPeriod; jj++) {
-          // INSERT REGION C
-                  j   = state_index(a);
-                  kj  = keccak_index(a);
-                  //printf("j %u\n", j);
-                  _c  = _mm_load_si128(R128(&hp_state[j]));
-                  _kc = _mm_load_si128(R128(&hp_state[kj]));
-                  //_dc = _mm_load_si128(R128(&hp_state[ (mz>>4)<<4 ]));
-                  _c  = _mm_xor_si128(_c, _kc);
-                  //_c  = _mm_xor_si128(_c, _dc);
-                  _a  = _mm_load_si128(R128(a));
-          
-                  mz += 16;
-                  //printf("mz %u\n", mz);
-          #if 0
-                  if (mz == MEMORY) {
-                    mz = 0;
-                    if (MEMORY < length) {
-                      // MACRO INSERT REGION D1234
-                    }
-                  }
-          #endif
-          
-                  _c = _mm_aesenc_si128(_c, _a);
-                  //printf("pz2 %u\n", pz);
-          
-                  _mm_store_si128(R128(c), _c);
-                  kj = keccak_index(c);
-                  //_kc = _mm_load_si128(R128(&hp_state[kj]));
-                  _b = _mm_xor_si128(_b, _c);
-                  _kb = _mm_xor_si128(_b, _kc);
-                  _mm_store_si128(R128(&hp_state[j]),  _b);
-                  _mm_store_si128(R128(&hp_state[kj]), _kb);
-                  j = state_index(c);
-                  p = U64(&hp_state[j]);
-                  b[0] = p[0]; b[1] = p[1];
-                  __mul();
-                  a[0] += hi; a[1] += lo;
-                  p = U64(&hp_state[j]);
-                  p[0] = a[0];  p[1] = a[1];
-                  a[0] ^= b[0]; a[1] ^= b[1];
-                  _b = _c;
-                  // Theta
-                  for (i = 0; i < 5; i++)     
-                      bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^ st[i + 15] ^ st[i + 20];
-                  for (i = 0; i < 5; i++) {
-                      t = bc[(i + 4) % 5] ^ ROTL64(bc[(i + 1) % 5], 1);
-                      for (j = 0; j < 25; j += 5)
-                          st[j + i] ^= t;
-                  }
-                  // Rho Pi
-                  t = st[1];
-                  for (i = 0; i < 24; i++) {
-                      j = keccakf_piln[i];
-                      bc[0] = st[j];
-                      st[j] = ROTL64(t, keccakf_rotc[i]);
-                      t = bc[0];
-                  }
-                  //  Chi
-                  for (j = 0; j < 25; j += 5) {
+                      _c = _mm_aesenc_si128(_c, _a);
+                      //printf("pz2 %u\n", pz);
+
+                      _mm_store_si128(R128(c), _c);
+                      kj = keccak_index(c);
+                      //_kc = _mm_load_si128(R128(&hp_state[kj]));
+                      _b = _mm_xor_si128(_b, _c);
+                      _kb = _mm_xor_si128(_b, _kc);
+                      _mm_store_si128(R128(&hp_state[j]),  _b);
+                      _mm_store_si128(R128(&hp_state[kj]), _kb);
+                      j = state_index(c);
+                      p = U64(&hp_state[j]);
+                      b[0] = p[0]; b[1] = p[1];
+                      __mul();
+                      a[0] += hi; a[1] += lo;
+                      p = U64(&hp_state[j]);
+                      p[0] = a[0];  p[1] = a[1];
+                      a[0] ^= b[0]; a[1] ^= b[1];
+                      _b = _c;
+                      // Theta
                       for (i = 0; i < 5; i++)
-                          bc[i] = st[j + i];
-                      for (i = 0; i < 5; i++)
-                          st[j + i] ^= (~bc[(i + 1) % 5]) & bc[(i + 2) % 5];
-                  }
-                  //  Iota
-                  st[0] ^= keccakf_rndc[round];
-                  if (round == 23) round = 0; else round++;
-          // REGION C INSERTED
-        }
-        extra_hashes[state.hs.b[0] & 3](&state, 200, &hash[(*fragments)*32]);
-        // INSERT REGION E
-        for (iii=0; iii<2; iii++) { // xor st with *hash
-          _aa  = _mm_load_si128(R128(  &hash[(*fragments)*32+(iii<<4)]      ));
-          _bb  = _mm_load_si128(R128(  &st[iii<<4]  ));
-          _bb  = _mm_xor_si128(_bb, _aa);
-          _mm_store_si128(R128( &st[iii<<4]  ), _bb);
-          hash_permutation((union hash_state*)st);
-        }
-        // REGION E INSERTED
-      }
-    }
-    else
-    {
-      printf("use hw\n");
-      /*
-      for(ii = 0; ii < fragmentSize; ii++)
-      {
-        // MMMACRO INSERT REGION A
-        aesb_single_round((uint8_t *) &_c, (uint8_t *) &_c, (uint8_t *) &_a);
-        // MMMACRO INSERT REGION B
-      }
-      */
-    }
-
+                          bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^ st[i + 15] ^ st[i + 20];
+                      for (i = 0; i < 5; i++) {
+                          t = bc[(i + 4) % 5] ^ ROTL64(bc[(i + 1) % 5], 1);
+                          for (j = 0; j < 25; j += 5)
+                              st[j + i] ^= t;
+                      }
+                      // Rho Pi
+                      t = st[1];
+                      for (i = 0; i < 24; i++) {
+                          j = keccakf_piln[i];
+                          bc[0] = st[j];
+                          st[j] = ROTL64(t, keccakf_rotc[i]);
+                          t = bc[0];
+                      }
+                      //  Chi
+                      for (j = 0; j < 25; j += 5) {
+                          for (i = 0; i < 5; i++)
+                              bc[i] = st[j + i];
+                          for (i = 0; i < 5; i++)
+                              st[j + i] ^= (~bc[(i + 1) % 5]) & bc[(i + 2) % 5];
+                      }
+                      //  Iota
+                      st[0] ^= keccakf_rndc[round];
+                      if (round == 23) round = 0; else round++;
+              // REGION C INSERTED
+            }
+            extra_hashes[state.hs.b[0] & 3](&state, 200, &hash[(*fragments)*32]);
+            // INSERT REGION E
+            for (iii=0; iii<2; iii++) { // xor st with *hash
+              _aa  = _mm_load_si128(R128(  &hash[(*fragments)*32+(iii<<4)]      ));
+              _bb  = _mm_load_si128(R128(  &st[iii<<4]  ));
+              _bb  = _mm_xor_si128(_bb, _aa);
+              _mm_store_si128(R128( &st[iii<<4]  ), _bb);
+              hash_permutation((union hash_state*)st);
+            }
+            // REGION E INSERTED
+          }
     // проверить кондицию log2 для 256 бит хэша, выдать что блок решился
 
 #define h(x) ((unsigned int)hash[(*fragments)*32+x])
