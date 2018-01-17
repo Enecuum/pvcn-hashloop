@@ -898,51 +898,10 @@ void pvcn_hashloop_hw(const void *data, size_t length
     }
 
 }
-
-#elif defined(__arm__)
-// ND: Some minor optimizations for ARM7 (raspberrry pi 2), effect seems to be ~40-50% faster.
-//     Needs more work.
-void slow_hash_allocate_state(void)
-{
-  // Do nothing, this is just to maintain compatibility with the upgraded slow-hash.c
-  return;
-}
-
-void slow_hash_free_state(void)
-{
-  // As above
-  return;
-}
-
-static void (*const extra_hashes[4])(const void *, size_t, char *) = {
-  hash_extra_blake, hash_extra_groestl, hash_extra_jh, hash_extra_skein
-};
-
-#define MEMORY         (1 << 21) /* 2 MiB */
-#define ITER           (1 << 20)
-#define AES_BLOCK_SIZE  16
-#define AES_KEY_SIZE    32 /*16*/
-#define INIT_SIZE_BLK   8
-#define INIT_SIZE_BYTE (INIT_SIZE_BLK * AES_BLOCK_SIZE)
-
-#if defined(__GNUC__)
-#define RDATA_ALIGN16 __attribute__ ((aligned(16)))
-#define STATIC static
-#define INLINE inline
-#else
-#define RDATA_ALIGN16
-#define STATIC static
-#define INLINE
-#endif
-
-#define U64(x) ((uint64_t *) (x))
-
-#include "aesb.c"
-
-/* The asm corresponds to this C code
+// The asm corresponds to this C code
 #define SHORT uint32_t
 #define LONG uint64_t
-
+#define mul(a, b, c)    cn_mul128(a, b, c)
 void mul(const uint8_t *ca, const uint8_t *cb, uint8_t *cres) {
   const SHORT *aa = (SHORT *)ca;
   const SHORT *bb = (SHORT *)cb;
@@ -970,11 +929,11 @@ void mul(const uint8_t *ca, const uint8_t *cb, uint8_t *cres) {
   res[3] = t.tmp[2];
   res[0] = t.tmp[6];
   res[1] = t.tmp[7];
-} */
+}
 
 /* Can work as inline, but actually runs slower. Keep it separate */
-#define mul(a, b, c)    cn_mul128(a, b, c)
-void mul(const uint8_t *ca, const uint8_t *cb, uint8_t *cr)
+
+/*void mul(const uint8_t *ca, const uint8_t *cb, uint8_t *cr)
 {
   const uint32_t *aa = (uint32_t *)ca;
   const uint32_t *bb = (uint32_t *)cb;
@@ -1004,7 +963,7 @@ __asm__ __volatile__(
   : [t0]"=&r"(t0), [t1]"=&r"(t1)
   : [A]"r"(aa[1]), [a]"r"(aa[0]), [B]"r"(bb[1]), [b]"r"(bb[0]), [r]"r"(r)
   : "cc", "memory");
-}
+}*/
 
 STATIC INLINE void sum_half_blocks(uint8_t* a, const uint8_t* b)
 {
@@ -1030,25 +989,7 @@ STATIC INLINE void swap_blocks(uint8_t *a, uint8_t *b)
   U64(b)[1] = U64(t)[1];
 }
 
-STATIC INLINE void xor_blocks(uint8_t* a, const uint8_t* b)
-{
-  U64(a)[0] ^= U64(b)[0];
-  U64(a)[1] ^= U64(b)[1];
-}
-
-#pragma pack(push, 1)
-union cn_slow_hash_state
-{
-    union hash_state hs;
-    struct
-    {
-        uint8_t k[64];
-        uint8_t init[INIT_SIZE_BYTE];
-    };
-};
-#pragma pack(pop)
-
-void cn_slow_hash_software(const void *data, size_t length, char *hash)
+void cn_slow_hash_software(const void *data, size_t length, uint8_t *hash)
 {
     uint8_t long_state[MEMORY];
     uint8_t text[INIT_SIZE_BYTE];
@@ -1128,6 +1069,48 @@ void cn_slow_hash_software(const void *data, size_t length, char *hash)
     hash_permutation(&state.hs);
     extra_hashes[state.hs.b[0] & 3](&state, 200, hash);
 }
+
+#elif defined(__arm__)
+// ND: Some minor optimizations for ARM7 (raspberrry pi 2), effect seems to be ~40-50% faster.
+//     Needs more work.
+void slow_hash_allocate_state(void)
+{
+  // Do nothing, this is just to maintain compatibility with the upgraded slow-hash.c
+  return;
+}
+
+void slow_hash_free_state(void)
+{
+  // As above
+  return;
+}
+
+static void (*const extra_hashes[4])(const void *, size_t, char *) = {
+  hash_extra_blake, hash_extra_groestl, hash_extra_jh, hash_extra_skein
+};
+
+#define MEMORY         (1 << 21) /* 2 MiB */
+#define ITER           (1 << 20)
+#define AES_BLOCK_SIZE  16
+#define AES_KEY_SIZE    32 /*16*/
+#define INIT_SIZE_BLK   8
+#define INIT_SIZE_BYTE (INIT_SIZE_BLK * AES_BLOCK_SIZE)
+
+#if defined(__GNUC__)
+#define RDATA_ALIGN16 __attribute__ ((aligned(16)))
+#define STATIC static
+#define INLINE inline
+#else
+#define RDATA_ALIGN16
+#define STATIC static
+#define INLINE
+#endif
+
+#define U64(x) ((uint64_t *) (x))
+
+#include "aesb.c"
+
+
 
 #else
 // Portable implementation as a fallback

@@ -2,4 +2,6 @@
 exe/*
 out
 *.out
+.idea/*
+pvcn-hashloop.iml
 

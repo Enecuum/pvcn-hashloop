@@ -13,4 +13,4 @@ gcc -maes -O3 -c src/hash-extra-jh.c -o out/hash-extra-jh.o
 gcc -maes -O3 -c src/hash-extra-skein.c -o out/hash-extra-skein.o
 gcc -maes -O3 -c src/hash-extra-groestl.c -o out/hash-extra-groestl.o
 gcc -maes -O3 -c src/groestl.c -o out/groestl.o
-g++ -O3 out/slow-hash.o out/aesb.o out/hash.o out/groestl.o out/blake256.o out/skein.o out/jh.o out/oaes_lib.o out/hash-extra-groestl.o out/hash-extra-blake.o out/hash-extra-jh.o out/hash-extra-skein.o hashloop/hashloop.cpp -o slow-hash.out
+g++ -std=c++11 -O3 out/slow-hash.o out/aesb.o out/hash.o out/groestl.o out/blake256.o out/skein.o out/jh.o out/oaes_lib.o out/hash-extra-groestl.o out/hash-extra-blake.o out/hash-extra-jh.o out/hash-extra-skein.o hashloop/hashloop.cpp -o slow-hash.out
