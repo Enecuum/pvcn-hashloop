@@ -586,10 +586,8 @@ void pvcn_hashloop_hw(const void *data,
                       uint8_t *hash)
 {
     int fragmentsCounter = 1;
-    int *fragments = &fragmentsCounter;
-    RDATA_ALIGN16 uint8_t expandedKey[240];  /* These buffers are aligned to use later with SSE functions */
+    int *fragments = &fragmentsCounter; //already created fragments counter
 
-    uint8_t text[INIT_SIZE_BYTE];
     RDATA_ALIGN16 uint64_t a[2];
     RDATA_ALIGN16 uint64_t b[2];
     RDATA_ALIGN16 uint64_t c[2];
@@ -623,21 +621,18 @@ void pvcn_hashloop_hw(const void *data,
       memcpy(&state.hs, keccak_state, sizeof(state.hs));
     }
 
-#define st ((uint64_t*)(&state.hs))
-
-    // MACRO REGION E
+    uint64_t* st1 =&state.hs;
     for (iii=0; iii<2; iii++) { // xor st with *hash
       _aa  = _mm_load_si128(R128(  &hash[(*fragments)*32+(iii<<4)]      ));
-      _bb  = _mm_load_si128(R128(  &st[iii<<4]  ));
+      _bb  = _mm_load_si128(R128(  &st1[iii<<4]  ));
       _bb  = _mm_xor_si128(_bb, _aa);
-      _mm_store_si128(R128( &st[iii<<4]  ), _bb);
-      hash_permutation((union hash_state*)st);
+      _mm_store_si128(R128( &st1[iii<<4]  ), _bb);
+      hash_permutation((union hash_state*)st1);
     }
-    // MACRO REMEMBER REGION E
 
-#undef st
-#define st ((uint64_t*)hp_state)
-
+    uint64_t* st = (uint64_t*)hp_state;
+    RDATA_ALIGN16 uint8_t expandedKey[240];  /* These buffers are aligned to use later with SSE functions */
+    uint8_t text[INIT_SIZE_BYTE];
     memcpy(text, state.init, INIT_SIZE_BYTE);
 
     /* CryptoNight Step 2:  Iteratively encrypt the results from Keccak to fill
@@ -656,22 +651,6 @@ void pvcn_hashloop_hw(const void *data,
     int mz = 0;
     int iii;
     int mempz = 0;
-
-    // MACRO REGION D1234
-#if 0
-    for (iii=0; iii<MEMORY; iii+=16) {
-        //printf("%u %u\n", iii, pz);
-        //_aa  = _mm_load_si128(R128(  &(((uint8_t*)data)[pz])   ));
-        _bb  = _mm_load_si128(R128(  &hp_state[iii]  ));
-        _aa  = _mm_xor_si128(_aa, _bb);
-        _mm_store_si128(R128( &hp_state[iii]  ), _aa);
-        //printf("pz0 %u %u %u\n", pz, iii, MEMORY);
-        pz += 16;
-        if (pz == length) pz = 0;
-        else if (pz > (length-16)) pz = length - 16;
-    }
-#endif
-    // MACRO REMEMBER REGION D1234
 
     U64(a)[0] = U64(&state.k[0])[0] ^ U64(&state.k[32])[0];
     U64(a)[1] = U64(&state.k[0])[1] ^ U64(&state.k[32])[1];
@@ -863,6 +842,7 @@ void pvcn_hashloop_hw(const void *data,
     }
 
 }
+
 // The asm corresponds to this C code
 #define SHORT uint32_t
 #define LONG uint64_t
