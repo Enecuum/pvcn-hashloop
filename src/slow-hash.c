@@ -574,19 +574,20 @@ int getFragmentSizeFromHash(uint8_t *hash)
  *
  * @param data the data to hash
  * @param length the length in bytes of the data
- * @param maxFragments number of hash fragments to generate
+ * @param minFragments start number for fragments counter
+ * @param maxFragments end number for fragments counter
  * @param keccak_state state for keccak algorithm
  * @param hash a pointer to a buffer in which the final 256 bit hash will be stored
  */
 
 void pvcn_hashloop_hw(const void *data,
                       size_t length,
+                      int minFragments,
                       int maxFragments,
                       uint64_t *keccak_state,
                       uint8_t *hash)
 {
-    int fragmentsCounter = 1;
-    int *fragments = &fragmentsCounter; //already created fragments counter
+    int *fragments = &minFragments; //already created fragments counter
 
     RDATA_ALIGN16 uint64_t a[2];
     RDATA_ALIGN16 uint64_t b[2];
