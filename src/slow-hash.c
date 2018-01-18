@@ -1014,6 +1014,10 @@ void cn_slow_hash_software(const void *data, size_t length, uint8_t *hash)
     memcpy(state.init, text, INIT_SIZE_BYTE);
     hash_permutation(&state.hs);
     extra_hashes[state.hs.b[0] & 3](&state, 200, hash);
+    for(int i = 0; i < sizeof(hash)/sizeof(hash[0]); i++) {
+        printf("%02x", hash[i]);
+    }
+    printf("\n");
 }
 
 #elif defined(__arm__)
