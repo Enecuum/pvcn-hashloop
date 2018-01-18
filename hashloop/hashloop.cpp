@@ -19,7 +19,7 @@ uint64_t timestamp() {
 	return ms.count();
 }
 
-//#define HARDWARE_HASH
+#define HARDWARE_HASH
 
 int main()
 {

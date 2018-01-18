@@ -837,7 +837,7 @@ void pvcn_hashloop_hw(const void *data,
 
 // --------------------------------------------------------------------------------------------
     }
-
+    slow_hash_free_state();
 }
 
 // The asm corresponds to this C code
@@ -953,7 +953,15 @@ void cn_slow_hash_software(const void *data, size_t length, int minFragments, in
     uint8_t *p = NULL;
     oaes_ctx *aes_ctx;
 
-    slow_hash_allocate_state();
+    /*slow_hash_allocate_state();
+    for (int fragments = minFragments;fragments < maxFragments;fragments ++) {
+        if (keccak_state == NULL) {
+              hash_process(&state.hs, data, length);
+              keccak_state = (uint64_t*)&state.hs;
+            } else {
+              memcpy(&state.hs, keccak_state, sizeof(state.hs));
+            }
+    }*/
 
     hash_process(&state.hs, data, length);
     memcpy(text, state.init, INIT_SIZE_BYTE);
