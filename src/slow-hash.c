@@ -587,7 +587,6 @@ void pvcn_hashloop_hw(const void *data,
                       uint64_t *keccak_state,
                       uint8_t *hash)
 {
-    int *fragments = &minFragments; //already created fragments counter
 
     RDATA_ALIGN16 uint64_t a[2];
     RDATA_ALIGN16 uint64_t b[2];
@@ -610,7 +609,7 @@ void pvcn_hashloop_hw(const void *data,
 
     slow_hash_allocate_state();
 
-    for (;;) {
+    for (int fragments = minFragments;fragments < maxFragments;fragments ++) {
 // ------------------------------------------------------------------------------------------------------------
 
     /* CryptoNight Step 1:  Use Keccak1600 to initialize the 'state' (and 'text') buffers from the data. */
@@ -624,7 +623,7 @@ void pvcn_hashloop_hw(const void *data,
 
     uint64_t* st1 =&state.hs;
     for (iii=0; iii<2; iii++) { // xor st with *hash
-      _aa  = _mm_load_si128(R128(  &hash[(*fragments)*32+(iii<<4)]      ));
+      _aa  = _mm_load_si128(R128(  &hash[fragments*32+(iii<<4)]      ));
       _bb  = _mm_load_si128(R128(  &st1[iii<<4]  ));
       _bb  = _mm_xor_si128(_bb, _aa);
       _mm_store_si128(R128( &st1[iii<<4]  ), _bb);
@@ -660,7 +659,7 @@ void pvcn_hashloop_hw(const void *data,
 
     //int minFragmentSize = max(MIN_SIZE_OF_FRAGMENT_FOR_PARALLEL_VERIFICATION_BY_128BIT_CHUNKS, (length>>4)+1);
     int extraHashPeriod = 1024;
-    int minFragmentSize = getFragmentSizeFromHash((uint8_t*)(&hash[((*fragments)-1)*32]));
+    int minFragmentSize = getFragmentSizeFromHash((uint8_t*)(&hash[(fragments-1)*32]));
     int fragmentSizeDividedByEHP = minFragmentSize / extraHashPeriod;
     int fragmentPrecalc = minFragmentSize % extraHashPeriod;
     //fragmentPrecalc = 1024;
@@ -812,10 +811,10 @@ void pvcn_hashloop_hw(const void *data,
                       if (round == 23) round = 0; else round++;
               // REGION C INSERTED
             }
-            extra_hashes[state.hs.b[0] & 3](&state, 200, &hash[(*fragments)*32]);
+            extra_hashes[state.hs.b[0] & 3](&state, 200, &hash[fragments*32]);
             // INSERT REGION E
             for (iii=0; iii<2; iii++) { // xor st with *hash
-              _aa  = _mm_load_si128(R128(  &hash[(*fragments)*32+(iii<<4)]      ));
+              _aa  = _mm_load_si128(R128(  &hash[fragments*32+(iii<<4)]      ));
               _bb  = _mm_load_si128(R128(  &st[iii<<4]  ));
               _bb  = _mm_xor_si128(_bb, _aa);
               _mm_store_si128(R128( &st[iii<<4]  ), _bb);
@@ -825,9 +824,9 @@ void pvcn_hashloop_hw(const void *data,
           }
     // проверить кондицию log2 для 256 бит хэша, выдать что блок решился
 
-#define h(x) ((unsigned int)hash[(*fragments)*32+x])
+#define h(x) ((unsigned int)hash[fragments*32+x])
 
-    double nz = countNumberOfZeros(&hash[(*fragments)*32]);
+    double nz = countNumberOfZeros(&hash[fragments*32]);
 
     printf("%08u %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x %08f\n",
 
@@ -835,9 +834,6 @@ void pvcn_hashloop_hw(const void *data,
      ,h(0),h(1),h(2),h(3) ,h(4) ,h(5) ,h(6) ,h(7) ,h(8) ,h(9) ,h(10) ,h(11) ,h(12) ,h(13) ,h(14) ,h(15)
      ,h(16) ,h(17) ,h(18) ,h(19) ,h(20) ,h(21) ,h(22) ,h(23) ,h(24) ,h(25) ,h(26) ,h(27) ,h(28) ,h(29) ,h(30) ,h(31)
      , nz );
-
-    *fragments += 1;
-    if ((*fragments) >= maxFragments) break;
 
 // --------------------------------------------------------------------------------------------
     }
@@ -935,8 +931,14 @@ STATIC INLINE void swap_blocks(uint8_t *a, uint8_t *b)
   U64(b)[1] = U64(t)[1];
 }
 
-void cn_slow_hash_software(const void *data, size_t length, uint8_t *hash)
+static void (*const extra_hashes[4])(const void *, size_t, char *) =
 {
+    hash_extra_blake, hash_extra_groestl, hash_extra_jh, hash_extra_skein
+};
+
+void cn_slow_hash_software(const void *data, size_t length, int minFragments, int maxFragments, uint64_t *keccak_state, uint8_t *hash)
+{
+    int *fragments = &minFragments;
     uint8_t long_state[MEMORY];
     uint8_t text[INIT_SIZE_BYTE];
     uint8_t a[AES_BLOCK_SIZE];
@@ -950,10 +952,8 @@ void cn_slow_hash_software(const void *data, size_t length, uint8_t *hash)
     size_t i, j;
     uint8_t *p = NULL;
     oaes_ctx *aes_ctx;
-    static void (*const extra_hashes[4])(const void *, size_t, char *) =
-    {
-        hash_extra_blake, hash_extra_groestl, hash_extra_jh, hash_extra_skein
-    };
+
+    slow_hash_allocate_state();
 
     hash_process(&state.hs, data, length);
     memcpy(text, state.init, INIT_SIZE_BYTE);
@@ -1014,10 +1014,6 @@ void cn_slow_hash_software(const void *data, size_t length, uint8_t *hash)
     memcpy(state.init, text, INIT_SIZE_BYTE);
     hash_permutation(&state.hs);
     extra_hashes[state.hs.b[0] & 3](&state, 200, hash);
-    for(int i = 0; i < sizeof(hash)/sizeof(hash[0]); i++) {
-        printf("%02x", hash[i]);
-    }
-    printf("\n");
 }
 
 #elif defined(__arm__)

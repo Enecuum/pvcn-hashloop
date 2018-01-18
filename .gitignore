@@ -4,4 +4,4 @@ out
 *.out
 .idea/*
 pvcn-hashloop.iml
-
+.project
