@@ -180,6 +180,8 @@ void cpuid(int CPUInfo[4], int InfoType)
 }
 #endif
 
+const int hashSize = 32;
+
 /**
  * @brief a = (a xor b), where a and b point to 128 bit values
  */
@@ -824,16 +826,17 @@ void pvcn_hashloop_hw(const void *data,
           }
     // проверить кондицию log2 для 256 бит хэша, выдать что блок решился
 
-#define h(x) ((unsigned int)hash[fragments*32+x])
-
-    double nz = countNumberOfZeros(&hash[fragments*32]);
-
-    printf("%08u %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x %08f\n",
-
-     minFragmentSize
-     ,h(0),h(1),h(2),h(3) ,h(4) ,h(5) ,h(6) ,h(7) ,h(8) ,h(9) ,h(10) ,h(11) ,h(12) ,h(13) ,h(14) ,h(15)
-     ,h(16) ,h(17) ,h(18) ,h(19) ,h(20) ,h(21) ,h(22) ,h(23) ,h(24) ,h(25) ,h(26) ,h(27) ,h(28) ,h(29) ,h(30) ,h(31)
-     , nz );
+    double nz = countNumberOfZeros(&hash[fragments*hashSize]);
+    uint8_t *value2display = malloc((hashSize*sizeof(uint8_t)));
+    int stopIndex = fragments*hashSize+hashSize;
+    int startIndex = fragments*hashSize;
+    for(i = startIndex;i<stopIndex;i++) {
+        value2display[i-startIndex] = hash[i];
+    }
+    printf("%08u ",minFragmentSize);
+    for(i = 0; i < hashSize;i++)
+        printf("%02x", value2display[i]);
+    printf(" %08f\n", nz );
 
 // --------------------------------------------------------------------------------------------
     }
