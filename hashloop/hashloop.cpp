@@ -24,15 +24,14 @@ uint64_t timestamp() {
 int main()
 {
 	char data[] = { 0 };
-	const int maxFragments = 20;
-	const int minFragments = 0;
-	uint8_t hash[32*maxFragments];
+	const int fragments = 20;
+	uint8_t hash[32*fragments];
 	memset(hash, 0, sizeof(hash));
 	auto t1 = timestamp();
 	#ifdef HARDWARE_HASH
-	pvcn_hashloop_hw(data, 0, minFragments, maxFragments, NULL, hash);
+	pvcn_hashloop_hw(data, 0, fragments, NULL, hash);
 	#else
-	cn_slow_hash_software(data, 0, minFragments, maxFragments, NULL, hash);
+	cn_slow_hash_software(data, 0, fragments, NULL, hash);
 	#endif
 	auto t2 = timestamp();
 	#ifdef HARDWARE_HASH
@@ -42,7 +41,7 @@ int main()
 	} else {
 		std::cout << "self-check failed!!!" << std::endl;
 	}
-	std::cout << "t = " << (t2 - t1) << ", hashrate = " << ((maxFragments-1) * 1000.0 / double(t2 - t1)) << std::endl;
+	std::cout << "t = " << (t2 - t1) << ", hashrate = " << ((fragments-1) * 1000.0 / double(t2 - t1)) << std::endl;
 	#else
 	char value2check[] = "\xeb\x14\xe8\xa8\x33\xfa\xc6\xfe";
 	if (0 == memcmp(hash, value2check, 8)) {

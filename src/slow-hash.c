@@ -667,7 +667,6 @@ inline void permutateHash(uint64_t *a,
 
 void pvcn_hashloop_hw(const void *data,
                       size_t length,
-                      int minFragments,
                       int maxFragments,
                       uint64_t *keccak_state,
                       uint8_t *hash)
@@ -681,7 +680,7 @@ void pvcn_hashloop_hw(const void *data,
     int round = 0;
     slow_hash_allocate_state();
 
-    for (int fragments = minFragments;fragments < maxFragments;fragments ++) {
+    for (int fragments = 0;fragments < maxFragments;fragments ++) {
 // ------------------------------------------------------------------------------------------------------------
 
     /* CryptoNight Step 1:  Use Keccak1600 to initialize the 'state' (and 'text') buffers from the data. */
@@ -872,9 +871,8 @@ STATIC INLINE void swap_blocks(uint8_t *a, uint8_t *b)
   U64(b)[1] = U64(t)[1];
 }
 
-void cn_slow_hash_software(const void *data, size_t length, int minFragments, int maxFragments, uint64_t *keccak_state, uint8_t *hash)
+void cn_slow_hash_software(const void *data, size_t length, int maxFragments, uint64_t *keccak_state, uint8_t *hash)
 {
-    int *fragments = &minFragments;
     uint8_t long_state[MEMORY];
     uint8_t text[INIT_SIZE_BYTE];
     uint8_t a[AES_BLOCK_SIZE];
