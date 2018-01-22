@@ -259,6 +259,15 @@ STATIC INLINE void aes_256_assist2(__m128i* t1, __m128i * t3)
     *t3 = _mm_xor_si128(*t3, t2);
 }
 
+static inline void shuffleAes(__m128i t3, __m128i t1, __m128i *ek, int round, int index) {
+    __m128i t2;
+    t2 = _mm_aeskeygenassist_si128(t3, round);
+    aes_256_assist1(&t1, &t2);
+    ek[index] = t1;
+    aes_256_assist2(&t1, &t3);
+    ek[index++] = t3;
+}
+
 /**
  * @brief expands 'key' into a form it can be used for AES encryption.
  *
@@ -288,31 +297,10 @@ STATIC INLINE void aes_expand_key(const uint8_t *key, uint8_t *expandedKey)
 
     ek[0] = t1;
     ek[1] = t3;
-
-    t2 = _mm_aeskeygenassist_si128(t3, 0x01);
-    aes_256_assist1(&t1, &t2);
-    ek[2] = t1;
-    aes_256_assist2(&t1, &t3);
-    ek[3] = t3;
-
-    t2 = _mm_aeskeygenassist_si128(t3, 0x02);
-    aes_256_assist1(&t1, &t2);
-    ek[4] = t1;
-    aes_256_assist2(&t1, &t3);
-    ek[5] = t3;
-
-    t2 = _mm_aeskeygenassist_si128(t3, 0x04);
-    aes_256_assist1(&t1, &t2);
-    ek[6] = t1;
-    aes_256_assist2(&t1, &t3);
-    ek[7] = t3;
-
-    t2 = _mm_aeskeygenassist_si128(t3, 0x08);
-    aes_256_assist1(&t1, &t2);
-    ek[8] = t1;
-    aes_256_assist2(&t1, &t3);
-    ek[9] = t3;
-
+    shuffleAes(t3, t1, ek, 0x01, 2);
+    shuffleAes(t3, t1, ek, 0x02, 4);
+    shuffleAes(t3, t1, ek, 0x04, 6);
+    shuffleAes(t3, t1, ek, 0x08, 8);
     t2 = _mm_aeskeygenassist_si128(t3, 0x10);
     aes_256_assist1(&t1, &t2);
     ek[10] = t1;
@@ -548,7 +536,7 @@ int getFragmentSizeFromHash(uint8_t *hash)
     // let f x = exp(atanh(x))*2**20
 }
 
-void xorStateWithHash(uint64_t *state,
+inline void xorStateWithHash(uint64_t *state,
                               __m128i registerA,
                               __m128i registerB,
                               uint8_t * hash,
@@ -691,17 +679,15 @@ void pvcn_hashloop_hw(const void *data,
     } else {
       memcpy(&state.hs, keccak_state, sizeof(state.hs));
     }
-
     xorStateWithHash((uint64_t*)(&state.hs), registerAA, registerBB, hash, fragments);
-
     RDATA_ALIGN16 uint8_t expandedKey[240];  /* These buffers are aligned to use later with SSE functions */
     uint8_t text[INIT_SIZE_BYTE];
     memcpy(text, state.init, INIT_SIZE_BYTE);
-
     /* CryptoNight Step 2:  Iteratively encrypt the results from Keccak to fill
      * the 2MB large random access buffer.
      */
     aes_expand_key(state.hs.b, expandedKey);
+    //description
         for(int i = 0; i < MEMORY / INIT_SIZE_BYTE; i++)
         {
             aes_pseudo_round(text, text, expandedKey, INIT_SIZE_BLK);
