@@ -677,7 +677,7 @@ void pvcn_hashloop_hw(const void *data,
             memcpy(&hp_state[i * INIT_SIZE_BYTE], text, INIT_SIZE_BYTE);
         }
     memcpy(hp_state, &state.hs, sizeof(state.hs));
-//description
+
     U64(a)[0] = U64(&state.k[0])[0] ^ U64(&state.k[32])[0];
     U64(a)[1] = U64(&state.k[0])[1] ^ U64(&state.k[32])[1];
     U64(b)[0] = U64(&state.k[16])[0] ^ U64(&state.k[48])[0];
@@ -687,8 +687,6 @@ void pvcn_hashloop_hw(const void *data,
     int minFragmentSize = getFragmentSizeFromHash((uint8_t*)(&hash[(fragments-1)*32]));
     int fragmentSizeDividedByEHP = minFragmentSize / extraHashPeriod;
     int fragmentPrecalc = minFragmentSize % extraHashPeriod;
-
-    registerB = _mm_load_si128(R128(b));
 
           for(int index = 0; index < fragmentPrecalc; index++)
           {
