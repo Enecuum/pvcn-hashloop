@@ -671,18 +671,13 @@ void pvcn_hashloop_hw(const void *data,
      * the 2MB large random access buffer.
      */
     aes_expand_key(state.hs.b, expandedKey);
-    //description
         for(int i = 0; i < MEMORY / INIT_SIZE_BYTE; i++)
         {
             aes_pseudo_round(text, text, expandedKey, INIT_SIZE_BLK);
             memcpy(&hp_state[i * INIT_SIZE_BYTE], text, INIT_SIZE_BYTE);
         }
     memcpy(hp_state, &state.hs, sizeof(state.hs));
-
-    int pz = 0;
-    int pzl = 0;
-    int mempz = 0;
-
+//description
     U64(a)[0] = U64(&state.k[0])[0] ^ U64(&state.k[32])[0];
     U64(a)[1] = U64(&state.k[0])[1] ^ U64(&state.k[32])[1];
     U64(b)[0] = U64(&state.k[16])[0] ^ U64(&state.k[48])[0];
