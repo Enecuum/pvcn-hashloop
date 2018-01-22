@@ -374,16 +374,8 @@ STATIC INLINE void aes_pseudo_round_xor(const uint8_t *in, uint8_t *out,
     {
         d = _mm_loadu_si128(R128(in + i * AES_BLOCK_SIZE));
         d = _mm_xor_si128(d, *R128(x++));
-        d = _mm_aesenc_si128(d, *R128(&k[0]));
-        d = _mm_aesenc_si128(d, *R128(&k[1]));
-        d = _mm_aesenc_si128(d, *R128(&k[2]));
-        d = _mm_aesenc_si128(d, *R128(&k[3]));
-        d = _mm_aesenc_si128(d, *R128(&k[4]));
-        d = _mm_aesenc_si128(d, *R128(&k[5]));
-        d = _mm_aesenc_si128(d, *R128(&k[6]));
-        d = _mm_aesenc_si128(d, *R128(&k[7]));
-        d = _mm_aesenc_si128(d, *R128(&k[8]));
-        d = _mm_aesenc_si128(d, *R128(&k[9]));
+        for(int i = 0;i < 10; i++)
+            d = _mm_aesenc_si128(d, *R128(&k[i]));
         _mm_storeu_si128((R128(out + i * AES_BLOCK_SIZE)), d);
     }
 }
