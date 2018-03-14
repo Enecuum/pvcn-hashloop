@@ -1,7 +1,7 @@
 ## PVCN-Hashloop
 
 A library to generate pseudorandom hashes and display hash rate speed at which a device completes the generation. 
-The library uses a number of hashing functions to achieve a high security level. The encryption technology is based on the [https://github.com/alxarch/go-cryptonight/tree/master/src](Cryptonight) protocol modified for Proof-of-Work + Proof-of-Activity.
+The library uses a number of hashing functions to achieve a high security level. The encryption technology is based on the [Cryptonight](https://github.com/alxarch/go-cryptonight/tree/master/src) protocol modified for Proof-of-Work + Proof-of-Activity.
 
 
 ## How to Use
